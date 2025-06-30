@@ -1,0 +1,138 @@
+1단계: 데이터 불러오기 및 전처리
+import pandas as pd
+import numpy as np
+
+# 1. 데이터 로드 (가정: 'KOSPI200_Historical.csv' 파일에 코스피 200 일별 데이터가 있다고 가정)
+# 실제 코스피 200 데이터 파일명으로 대체하여 사용하세요.
+file_path = "KOSPI200_Historical.csv" 
+df_kospi200 = pd.read_csv(file_path)
+
+# 2. 컬럼명 정리 및 날짜 변환 (파일 형식에 맞게 컬럼명을 수정하세요)
+# 예시: '날짜' 컬럼이 'Date'로, '종가' 컬럼이 'Close'로 되어 있다고 가정
+df_kospi200.columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'Change', 'Change_Rate'] # 예시
+df_kospi200['Date'] = pd.to_datetime(df_kospi200['Date'])
+df_kospi200 = df_kospi200.set_index('Date')
+
+# 3. 결측치 처리 (필요시)
+df_kospi200['Close'] = df_kospi200['Close'].ffill()
+
+# 4. 일일 수익률 계산
+df_kospi200['Daily_Return'] = df_kospi200['Close'].pct_change()
+df_kospi200['Log_Return'] = np.log(df_kospi200['Close'] / df_kospi200['Close'].shift(1))
+
+print("--- 코스피 200 데이터 전처리 완료 ---")
+print(df_kospi200.head())
+
+2단계: 변동성 및 연환산 성과 지표 계산
+# 1. 21일 롤링 변동성 계산 (거래일 기준 약 1개월)
+trading_days_per_year = 252  # 한국 시장 연간 평균 거래일 수
+df_kospi200['Rolling_Volatility_21d'] = df_kospi200['Daily_Return'].rolling(window=21).std() * np.sqrt(trading_days_per_year)
+
+# 2. 연환산 성과 지표 계산
+# 총 누적 수익률
+initial_price = df_kospi200['Close'].iloc[0]
+final_price = df_kospi200['Close'].iloc[-1]
+cumulative_return = (final_price / initial_price) - 1
+
+# 기간 일수 계산
+days = (df_kospi200.index[-1] - df_kospi200.index[0]).days
+# 연환산 수익률
+annualized_return = (1 + cumulative_return) ** (365 / days) - 1
+# 연환산 변동성
+annualized_volatility = df_kospi200['Daily_Return'].std() * np.sqrt(trading_days_per_year)
+# 샤프 비율 (무위험 수익률 0% 가정)
+sharpe_ratio = annualized_return / annualized_volatility
+
+print("\n--- 코스피 200 연환산 성과 지표 ---")
+print(f"총 누적 수익률: {cumulative_return * 100:.2f}%")
+print(f"연환산 수익률: {annualized_return * 100:.2f}%")
+print(f"연환산 변동성: {annualized_volatility * 100:.2f}%")
+print(f"샤프 비율 (무위험 수익률 0%): {sharpe_ratio:.2f}")
+
+3단계: 시각화 (Altair 사용)
+import altair as alt
+
+df_plot = df_kospi200.reset_index()
+
+# 1. 코스피 200 지수 시계열 차트
+chart_index = alt.Chart(df_plot).mark_line().encode(
+    x=alt.X('Date', title='날짜'),
+    y=alt.Y('Close', title='코스피 200 지수'),
+    tooltip=[alt.Tooltip('Date', title='날짜'), alt.Tooltip('Close', title='지수', format=',.2f')]
+).properties(
+    title='코스피 200 지수 시계열 변화'
+).interactive()
+
+chart_index.save('KOSPI200_Index_TimeSeries.json')
+
+# 2. 롤링 변동성 차트
+df_vol_plot = df_plot.dropna(subset=['Rolling_Volatility_21d'])
+
+chart_volatility = alt.Chart(df_vol_plot).mark_line().encode(
+    x=alt.X('Date', title='날짜'),
+    y=alt.Y('Rolling_Volatility_21d', title='연환산 변동성 (%)', axis=alt.Axis(format='.1%')),
+    tooltip=[alt.Tooltip('Date', title='날짜'), alt.Tooltip('Rolling_Volatility_21d', title='변동성', format='.2%')]
+).properties(
+    title='코스피 200 21일 롤링 변동성 (연환산)'
+).interactive()
+
+chart_volatility.save('KOSPI200_Rolling_Volatility.json')
+
+print("\n시각화 파일이 KOSPI200_Index_TimeSeries.json 및 KOSPI200_Rolling_Volatility.json으로 저장되었습니다.")
+
+#KRX 지수별 성과 비교
+
+import pandas as pd
+import altair as alt
+
+# Load the new CSV file
+df_kospi = pd.read_csv("data_2340_20251108.csv")
+
+# Clean up column names for easier access (optional but good practice)
+df_kospi.columns = ['Index_Name', 'Close', 'Change_Amount', 'Change_Rate', 'Open', 'High', 'Low', 'Volume', 'Trading_Value', 'Market_Cap']
+
+# Convert 'Trading_Value' (거래대금) to millions for better readability if needed,
+# but let's keep it as is first, only formatting for display later.
+
+# 1. 등락률 (Change_Rate) 기준으로 정렬
+# 당일 성과가 좋은 지수부터 나열
+df_sorted = df_kospi.sort_values(by='Change_Rate', ascending=False)
+
+# 2. 주요 지표 선택 및 출력
+# 지수명, 종가, 등락률, 거래대금, 상장시가총액을 비교합니다.
+comparison_cols = ['Index_Name', 'Close', 'Change_Rate', 'Trading_Value', 'Market_Cap']
+df_comparison = df_sorted[comparison_cols]
+
+print("--- 당일 (파일 기준) KRX 지수별 성과 비교 (등락률 기준 내림차순) ---")
+# Format the output for better readability: Change_Rate in %, Trading_Value/Market_Cap with commas
+df_comparison_formatted = df_comparison.copy()
+df_comparison_formatted['Change_Rate'] = df_comparison_formatted['Change_Rate'].apply(lambda x: f"{x:,.2f}%")
+df_comparison_formatted['Close'] = df_comparison_formatted['Close'].apply(lambda x: f"{x:,.2f}")
+df_comparison_formatted['Trading_Value'] = df_comparison_formatted['Trading_Value'].apply(lambda x: f"{x:,.0f}")
+df_comparison_formatted['Market_Cap'] = df_comparison_formatted['Market_Cap'].apply(lambda x: f"{x:,.0f}")
+
+print(df_comparison_formatted.to_string(index=False))
+
+# 3. 등락률 시각화
+# Altair로 등락률 비교 막대 그래프 생성
+chart_returns = alt.Chart(df_sorted).mark_bar().encode(
+    # 등락률 기준으로 정렬된 지수명
+    x=alt.X('Index_Name', sort='-y', title='지수명', axis=alt.Axis(labelAngle=-45)),
+    # 등락률을 퍼센트 형식으로 표시
+    y=alt.Y('Change_Rate', title='당일 등락률 (%)'),
+    # 막대 색상을 등락률 값에 따라 다르게 지정 (음수는 빨간색, 양수는 파란색 등)
+    color=alt.condition(
+        alt.datum.Change_Rate > 0,
+        alt.value("steelblue"),  # 긍정적인 값 (상승)
+        alt.value("red")         # 부정적인 값 (하락)
+    ),
+    tooltip=['Index_Name', alt.Tooltip('Change_Rate', format='.2f', title='등락률 (%)')]
+).properties(
+    title='KRX 지수별 당일 등락률 비교'
+).interactive()
+
+# Save the plot
+chart_returns.save('KRX_Index_Daily_Change_Rate_Comparison.json')
+
+print("\nVisualizations generated: KRX_Index_Daily_Change_Rate_Comparison.json")
+

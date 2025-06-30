@@ -1,0 +1,138 @@
+# 폐암 환자의 1년 생존율 분류하는 딥러닝 모델
+# - 데이터 : 비소세포성 폐암환자 50명
+
+# 폐암 환자의 1년 생존율 분류 모델 (NSCLC)
+
+이 프로젝트는 R을 활용하여 비소세포성 폐암(NSCLC) 환자의 임상 데이터를 바탕으로,  
+1년 내 생존 여부를 분류하는 인공신경망 기반 딥러닝 모델을 구현한 실습 코드입니다.
+
+## 📌 주요 내용
+
+1. **데이터 전처리**
+   - 생존일수 기준 파생변수 생성 (1년 이상 생존 여부)
+   - 범주형 변수 인코딩 (성별, 병기 등)
+   - 결측 처리 및 불필요 변수 제거
+
+2. **상관분석**
+   - 수치형 변수 간의 상관관계 시각화
+   - 변수 간 multicollinearity 탐색
+
+3. **신경망 모델 구현**
+   - `neuralnet` 패키지 사용
+   - hidden layer 구조: (5, 3)
+   - binary classification을 위한 sigmoid 출력
+
+4. **모델 평가**
+   - confusionMatrix로 정확도 확인
+   - 예측값과 실제값 비교
+
+## 🛠 사용 라이브러리
+
+- readxl
+- dplyr
+- caret
+- neuralnet
+- ggcorrplot
+
+---
+
+> 본 프로젝트는 데이터 분석 및 생존 모델링 학습을 위해 비식별된 임상 데이터를 활용한 예시입니다.
+
+
+# 0. 라이브러리 설치
+install.packages("readxl")
+install.packages("dplyr")
+install.packages("ggcorrplot")
+install.packages("caret")
+install.packages("neuralnet")
+
+library(readxl)
+library(dplyr)
+library(ggcorrplot)
+library(caret)
+library(neuralnet)
+
+# 1. 데이터 불러오기
+library(readxl)  # 안 했다면 꼭 불러주세요
+data <- read_excel("C:/Users/Administrator/Documents/LC_NSCLC_CLINICAL_n=50.xlsx")
+
+data <- read_excel("C:/Users/Administrator/Documents")
+df_lc <- read_excel("LC_NSCLC_CLINICAL_n=50.xlsx")
+getwd()
+# 2. 탐색적 데이터 분석
+dim(df_lc)
+str(df_lc)
+sumary(df_lc)
+
+# 3. 데이터 전처리
+# 가. 정답 파생변수 생성
+#    -1년 생존율
+#     survival.time > 365: 0(생존)
+#     survival.time < 365: 1(사망)
+
+df_lc$survival_rate_ly <- ifelse(df_lc$Survival.time <= 365, 1, 0)
+
+# 나. 데이터 클리닝
+#   - Overall.stage: 3A, 3B, 4A → 숫자만 추출
+#     1, 2, 3, 4기로 정제!
+df_lc$Overall.stage <- gsub("[^0-9]", "", df_lc$Overall.stage)
+
+# - gender: male(0), fmale(1)
+df_lc$gender <- ifelse(df_lc$gender == "male", 0, 1)
+
+# - age를 정수형으로 변경
+df_lc$age <- as.integer(df_lc$age)
+
+# - 불필요한 특징 제거
+df_lc <- df_lc%>%
+  select(-PatientID, -Survival.time, -Deadsatus.event)
+
+str(df_lc)
+
+# 4. 상관분석
+# - 숫자값이 필요
+df_lc <- lapply(df_lc, as.numeric) # 모든 타입 숫자로 변경
+df_lc <- as.data.frame(df_lc)      # 데이터프레임 변경
+str(df_lc)
+
+cor_matrix <- cor(df_lc)
+ggcorrplot(cor_matrix, type="full", lab=TRUE) +
+  ggtitle("Corr analysis") +
+  theme_minimal()
+
+# 5 데이터 분할
+set.seed(123)
+train_index <- createDataPartition(df_lc$survival_rate_ly,
+                                   p=0.8,
+                                   list=FALSE)
+train_data <- df_lc[train_index, ]
+test_data <- df_lc[-train_index, ]
+train_data$survival_rate_ly <-
+  as factor(train_data$survival_rate_ly)
+test_data$survival_rate_ly <-
+  as.factor(test_data$survival$rate_ly)
+
+# 6. 모델 학습
+sc_model <-
+  neuralnet(survival_rate_ly ~ gender + age + Overall.stage +
+              Clinical.T.Stage + Clinical.N.stage +
+              Clinical.M.stage + Smoking.status +
+              Smoking.amount,
+            data=train_data,
+            hidden=c(5, 3),
+            linear.output = FALSE)
+plot(sc_model)
+
+# 7. 모델 평가
+test_data$predicted <-
+  predict(sc_model, newdata=test_data, type="class")
+test_data$predicted <-
+  ifelse(predict(sc_model, newdata=test_data,
+                 type="response")[, 2] > 0.5, 1, 0)
+
+test_data$predicted <- as.factor(test_data$predicted)
+
+conf_matrix <-
+  confusionMatrix(test_data$predicted,
+                  test_data$survival_rate_ly)
+conf_matrix

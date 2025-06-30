@@ -1,0 +1,130 @@
+1. 데이터 처리 및 통계 분석 코드
+import pandas as pd
+import numpy as np
+
+# 1. 데이터 로드
+file_path = "SP500.csv"
+df = pd.read_csv(file_path)
+
+# 2. 데이터 전처리 및 인덱스 설정
+# 'observation_date' 컬럼을 datetime 형식으로 변환하고 인덱스로 설정
+df['observation_date'] = pd.to_datetime(df['observation_date'])
+df = df.set_index('observation_date')
+
+# 3. 결측치 처리 (Forward Fill)
+# SP500 지수 결측치를 직전 거래일 값으로 채우기
+df['SP500'] = df['SP500'].ffill()
+
+# 4. 수익률 계산
+# 일일 수익률 (Daily Return) 계산: (오늘 종가 / 어제 종가) - 1
+df['Daily_Return'] = df['SP500'].pct_change()
+
+# 로그 수익률 (Log Return) 계산: ln(오늘 종가 / 어제 종가)
+# np.log()를 사용하여 계산 (0 이하의 값 방지)
+df['Log_Return'] = np.log(df['SP500'] / df['SP500'].shift(1))
+
+# 5. 기술 통계 출력
+index_stats = df['SP500'].describe().rename('Index')
+daily_return_stats = df['Daily_Return'].describe().rename('Daily Return')
+log_return_stats = df['Log_Return'].describe().rename('Log Return')
+
+# 통계 결과 병합 및 출력
+all_stats = pd.concat([index_stats, daily_return_stats, log_return_stats], axis=1).T
+
+print("--- S&P 500 데이터 기술 통계 ---")
+print(all_stats)
+
+2. 시각화 코드 (Altair 사용)
+import altair as alt
+
+# 참고: 이 코드를 실행하기 위해서는 이전 단계에서 'df' 데이터프레임이 준비되어 있어야 합니다.
+# Altair는 인덱스가 아닌 일반 컬럼을 사용하므로 reset_index()를 사용합니다.
+df_plot = df.reset_index()
+
+# 1. S&P 500 지수 시계열 차트
+chart_index = alt.Chart(df_plot).mark_line().encode(
+    x=alt.X('observation_date', title='날짜'),
+    y=alt.Y('SP500', title='S&P 500 지수'),
+    tooltip=[alt.Tooltip('observation_date', title='날짜'), alt.Tooltip('SP500', title='지수', format=',.2f')]
+).properties(
+    title='S&P 500 지수 시계열 변화'
+).interactive() # 확대/축소 가능
+
+# JSON 파일로 저장
+chart_index.save('SP500_Index_TimeSeries.json')
+
+# 2. 일일 수익률 분포 (히스토그램)
+# NaN 값 (첫날 수익률) 제거
+returns_df = df_plot.dropna(subset=['Daily_Return'])
+
+chart_returns = alt.Chart(returns_df).mark_bar().encode(
+    x=alt.X('Daily_Return', bin=alt.Bin(maxbins=50), title='일일 수익률'),
+    y=alt.Y('count()', title='빈도수'),
+    tooltip=[alt.Tooltip('Daily_Return', bin=True, title='수익률 범위'), alt.Tooltip('count()', title='빈도수')]
+).properties(
+    title='S&P 500 일일 수익률 분포 (히스토그램)'
+)
+
+# JSON 파일로 저장
+chart_returns.save('SP500_Daily_Returns_Histogram.json')
+
+print("시각화 파일이 SP500_Index_TimeSeries.json 및 SP500_Daily_Returns_Histogram.json으로 저장되었습니다.")
+
+3단계: 데이터 처리 및 롤링 변동성 계산
+import pandas as pd
+import numpy as np
+import altair as alt
+
+# 데이터 로드 (이전 단계와 동일)
+df = pd.read_csv("SP500.csv")
+df['observation_date'] = pd.to_datetime(df['observation_date'])
+df = df.set_index('observation_date')
+df['SP500'] = df['SP500'].ffill()
+df['Daily_Return'] = df['SP500'].pct_change()
+df['Log_Return'] = np.log(df['SP500'] / df['SP500'].shift(1))
+
+# 21일 롤링 변동성 계산 (거래일 기준 약 1개월)
+# 252: 연간 거래일 수로 연환산
+trading_days_per_year = 252
+df['Rolling_Volatility_21d'] = df['Daily_Return'].rolling(window=21).std() * np.sqrt(trading_days_per_year)
+
+# 연환산 성과 지표 계산
+# 1. 누적 수익률 (Cumulative Return)
+initial_price = df['SP500'].iloc[0]
+final_price = df['SP500'].iloc[-1]
+cumulative_return = (final_price / initial_price) - 1
+
+# 2. 연환산 수익률 (Annualized Return)
+# 기간 일수 계산
+days = (df.index[-1] - df.index[0]).days
+annualized_return = (1 + cumulative_return) ** (365 / days) - 1
+
+# 3. 연환산 변동성 (Annualized Volatility)
+annualized_volatility = df['Daily_Return'].std() * np.sqrt(trading_days_per_year)
+
+# 4. 샤프 비율 (Sharpe Ratio, 무위험 수익률 0% 가정)
+sharpe_ratio = annualized_return / annualized_volatility
+
+print("--- 연환산 성과 지표 ---")
+print(f"기간 (시작일): {df.index[0].strftime('%Y-%m-%d')}")
+print(f"기간 (종료일): {df.index[-1].strftime('%Y-%m-%d')}")
+print(f"총 누적 수익률: {cumulative_return * 100:.2f}%")
+print(f"연환산 수익률: {annualized_return * 100:.2f}%")
+print(f"연환산 변동성: {annualized_volatility * 100:.2f}%")
+print(f"샤프 비율 (무위험 수익률 0%): {sharpe_ratio:.2f}")
+
+# 롤링 변동성 차트 생성을 위한 데이터 준비
+df_vol_plot = df.dropna(subset=['Rolling_Volatility_21d']).reset_index()
+
+# 롤링 변동성 차트 (Altair)
+chart_volatility = alt.Chart(df_vol_plot).mark_line().encode(
+    x=alt.X('observation_date', title='날짜'),
+    y=alt.Y('Rolling_Volatility_21d', title='연환산 변동성 (%)', axis=alt.Axis(format='.1%')),
+    tooltip=[alt.Tooltip('observation_date', title='날짜'), alt.Tooltip('Rolling_Volatility_21d', title='변동성', format='.2%')]
+).properties(
+    title='S&P 500 21일 롤링 변동성 (연환산)'
+).interactive() # 확대/축소 가능
+
+# JSON 파일로 저장
+chart_volatility.save('SP500_Rolling_Volatility.json')
+

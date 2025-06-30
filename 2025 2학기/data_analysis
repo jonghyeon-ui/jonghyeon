@@ -1,0 +1,216 @@
+# 기술 통계
+# - 데이터를 요약하고 설명하는데 사용
+# - 데이터의 중심 경향 산포 정도를 파악
+# - 주요 통계지표로는 평균, 중앙값, 최빈값, 분산, 표준편차 등
+
+# R을 활용한 기술 통계 및 시각화 실습
+
+이 저장소는 R을 활용하여 `iris` 데이터셋에 대한 기술 통계, 시각화, 상관분석, 선형 회귀분석을 실습한 코드입니다.  
+데이터 분석 기초를 학습하고, 통계적 개념을 시각적으로 이해하는 데에 목적이 있습니다.
+
+## 📊 주요 내용
+
+1. **기술 통계 분석**
+   - 평균, 중앙값, 분산, 표준편차 등
+   - 이상치 탐색을 위한 IQR 계산
+
+2. **데이터 시각화**
+   - 산점도(Scatter Plot)
+   - 박스플롯(Boxplot)
+   - 히스토그램(Histogram)
+
+3. **상관분석**
+   - 피어슨, 스피어만, 켄달 상관계수
+   - 상관행렬 및 히트맵 시각화
+
+4. **선형 회귀 분석**
+   - 단순 선형 회귀
+   - 모델 해석 (기울기, 절편)
+   - 예측 계산
+
+## 📦 사용 데이터
+
+- `iris`: R 내장 데이터셋
+- `cars`: R 내장 데이터셋
+
+## 🛠 사용 패키지
+
+- ggplot2
+- ggcorrplot
+- PerformanceAnalytics
+- GGally
+
+# 1. 데이터셋 로드
+# - 아이리스 데이터셋 불러오기
+data("iris")
+
+# 데이터 확인
+# - Sepal : 꽃받침
+# - Sepal : 꽃잎
+# - Species : 정답(3 품종)
+iris
+
+# AI 모델 1.순전파 2.오차계산 3.역전파
+
+# 2. 데이터 구조 확인
+# - row(n수) x col(특징 수)
+# - 150*5
+dim(iris)
+
+# 데이터 상세 구조 확인
+str(iris)
+
+# 3. 데이터 통계 계산
+# - Q1은 하위 25%지점 Q1보다 작다 -> 하위 25%
+# - Q3은 상위 75%지점 Q3qhek zmek -> 상위 25%
+# - IQR = Q3-Q1 (전체 데이터 중 중간 50% 퍼져 있는 범위)
+#   1) 데이터 분산(변동성) 파악
+#    - IQR 작으면 : 중간 50%가 좁은 범위 -> 일관성
+#    - IQR 크면 : 중간 50% 가 넓게 퍼짐 -> 변동 큼
+#   2) IQR을 사용해서 이상치를 파악
+#    - Q1 - 1.5 * IQR
+#    - Q2 + 1.5 * IQR
+summary(iris)
+
+# 4. 통계 함수 예제
+# 가. 분산
+# - 데이터가 평균으로 부터 얼마나 떨어져 있는지를제곱해서 평균낸 값
+# - 값이 클수록 데이터가 많이 흩어져 있음
+# 나. 표준편차
+# - 데이터가 평균으로부터 얼마나 떨어져 있는지를 평균적으로 나타냄
+# *분산과 표준편차가 작다 -> 데이터가 평균 근처에 몰려 있음 -> 안정적
+# *분산과 표준편차가 크다 -> 평균은 같더라도 값이 다양 -> 불안정한 분포
+
+var(iris$Sepal.Length)
+sd(iris$Sepal.Length)
+range(iris$Sepal.Length) # 범위 값
+
+# 5. 기술통계 시각화
+# 가. 산점도 분석
+install.packages("ggplot2")
+library(ggplot2)
+ggplot(iris, aes(x=Sepal.Length, y=Petal.Length, color=Species)) +
+  geom_point() +
+  ggtitle("Scatter Length") +
+  xlab("Sepal Length") +
+  ylab("Petal Length")
+
+# Boxplot
+# -이상치 데이터를 확인하는데 활용
+install.packages("ggplot2")
+
+library(ggplot2)
+
+ggplot(iris, aes(x=Species, y=Sepal.Length, fill=Species)) + 
+  geom_boxplot() + 
+  ggtitle("boxplot") + 
+  xlab("Species") + 
+  ylab("Sepal Length")
+
+# 히스토그램
+# - 연속형 : 히스토그램
+# - 범주형 : 막대 그래프
+ggplot(iris, aes(x = Sepal.Length, fill = Species)) +
+  geom_histogram(binwidth = 0.5, color = "black", position = "dodge") +
+  ggtitle("Histogram") + 
+  xlab("Sepal Length") +
+  ylab("Frequency")
+
+# 6. 상관분석
+# - 2개의 특징이 얼마나 상관이 있는지를 파악
+# - 인공지능 모델 개발
+# -> 특징(50개) -> 차원의 저주
+# -> 모델의 입력으로 들어가는 특징의 개수를 줄여야...
+# -> 정답 + 특징 = 상관정도
+# - 정답 + 특징 3개
+# -> 특징 생성 = 특징 3개를 섞어서!
+# - 새로운 특징 만드는 방법?
+# 1. 주성분분석(PCA)
+# 2. 오코인코더
+# 가. 피어슨 상관계수 - 가장 일반적으로 많이 사용하는 방법 / 두 변수 간의 상관관계를 측정
+# 나. 스피어만 상관계수 - 순위를 기반으로 사용하는 방법 / 비선형관계나 순위 데이터에 적합
+# 다. 켄탈 타우 상관분석 - 순위를 기반으로 사용하는 방법 / 두 변수간의 순위 일치 정도 측정
+
+# ex) 추천시스템 모델 성능 검증 
+# 결과값을 1순위, 2순위, 3순위 추천
+# 정답     1순위, 3순위, 2순위
+# 켄탈 타우 사용 - 순서까지도 고려하여 계산 ( 더 딥하게 평가하겠다는 의미)
+# 상관계수
+# -1~1
+# -1과1에 가까울수록 상관정도가 높음
+# 0에 가까울수록 상관정도가 없음
+# -1은 음의상관관계(a↑ b↑)
+# 1은 양의 상관관계(a↑ b↓)
+# +-0.3~+-0.7 약한 상관관계
+# +-0.7이상을 강한 상관관계 →통계학(딥러닝, 머신러닝에서는 사용x)
+
+
+
+# 피어슨 상관계수 계산
+cor(iris$Sepal.Length, iris$Petal.Length, method="pearson")
+cor(iris$Sepal.Length, iris$Petal.Length, method="spearman")
+cor(iris$Sepal.Length, iris$Petal.Length, method="kendall") # → 평가 척도로 사용
+
+# 상관행렬 계산(다수의 특징 활용)   <-는 = 과 같음
+iris_numeric <- iris[, 1:4]
+iris_numeric
+
+cor_matrix <- cor(iris_numeric)
+cor_matrix
+
+# 상관행렬 시각화
+install.packages("ggcorrplot")
+library(ggcorrplot)
+
+# Heatmap 그래프
+ggcorrplot(cor_matrix, type="full", lab=TRUE) + 
+  ggtitle("corr") + 
+  theme_minimal()
+
+install.packages("PerformanceAnalytics")
+library(PerformanceAnalytics)
+
+chart.Correlation(iris_numeric)
+
+# GGally
+install.packages("GGally")
+library(GGally)
+
+ggpairs(
+  iris,
+  columns = 1:4,
+  mapping = aes(color = Species),
+  upper = list(continuous = wrap("cor", size = 3)),
+  lower = list(continuous = wrap("points", alpha = 0.7, size = 0.5)),
+  diag = list(continuous = wrap("densityDiag", alpha = 0.5))
+)
+
+# 7. 선형 회귀분석(Linear regression)
+# - 상관분석을 짆행하고 상관정도가 있는 경우에 회귀 분석을 진행
+# - x,y 특징이 있을 떄 x로 y를 가장 잘 예측 할 수 있는 직선을 찾는 것
+# - y = ax + b
+# - a : 기울기
+# - b : y절편
+
+head(cars)
+
+# 산점도를 통해 선형관계 확인
+plot(dist~speed, data=cars)
+
+# 단순 회귀모델
+# - 종속변수(y) : dist
+# - 독립변수(x) : speed
+# speed가 7.5일때 dist는 몇인가? 예측?
+model <- lm(dist~speed, cars)
+model
+
+abline(model)
+coef(model)[1] # b(절편)
+coef(model)[2] # w(기울기)
+
+#속도가 30일때 제동거리는 100.3932
+w <- 2.5
+b <- 25.3932
+speed <- 30
+dist <- w * speed + b
+print(dist)

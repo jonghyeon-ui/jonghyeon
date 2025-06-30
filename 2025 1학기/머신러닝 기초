@@ -1,0 +1,319 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+data = [6, 4, 6, 11]
+clist = ['cyan', 'gray', 'orange', 'red']
+plt.pie(data, autopct = '%.2f', colors=clist)
+import matplotlib.pyplot as plt
+import numpy as np
+
+data = [5, 4, 6, 11]
+clist = ['cyan', 'gray', 'orange', 'red']
+explod = [.06, .07, .08, .09]
+plt.pie(data, autopct = '%.2f', colors=clist,
+        labels=clist,explode=explod)
+data = np.random.random((10, 10))
+plt.imshow(data)
+plt.colorbar()
+heights = np.array([175, 165, 164, 164, 171, 165, 160, 169, 164, 159, 163, 167,
+                    163, 172, 159, 160, 156, 162, 166, 162, 158, 167, 160, 161,
+                    156, 172, 168, 165, 165, 177])
+heights = np.array([175, 165, 164, 164, 171, 165, 160, 169, 164, 159, 163, 167,
+                    163, 172, 159, 160, 156, 162, 166, 162, 158, 167, 160, 161,
+                    156, 172, 168, 165, 165, 177])
+plt.hist(heights, bins=6)
+plt.xlabel("height")
+plt.ylabel("frequuency")
+import numpy as np
+import matplotlib.pyplot as plt
+
+f1 = np.random.randn(100000)
+plt.hist(f1, bins=200, color='red', alpha=.7,
+         label='avg = 0, std = 1')
+plt.axis([-8, 8, -2, 2500])
+plt.legend()
+f1 = np.random.normal(loc=0, scale=1, size=100000)
+f2 = np.random.normal(loc=3, scale=1, size=100000)
+
+plt.hist(f1, bins=200, color='red', alpha=.4,
+         label='avg = 0, std = 1')
+plt.hist(f2, bins=200, color='green', alpha=.4,
+         label='avg = 3, std = 1')
+plt.axis([-8, 8, -2, 2500])
+plt.legend()
+f1 = np.random.normal(loc=0, scale=1, size=100000)
+f2 = np.random.normal(loc=3, scale=3, size=100000)
+
+plt.hist(f1, bins=200, color='red', alpha=.4,
+         label='avg = 0, std = 1')
+
+plt.hist(f2, bins=200, color='green', alpha=.4,
+         label='avg = 3, std = 3')
+plt.axis([-8, 8, -2, 2500])
+plt.legend()
+rand_data = np.random.randn(100)
+
+plt.boxplot(rand_data)
+np.random.seed(85)
+data1 = np.random.normal(100, 10, 200)
+data2 = np.random.normal(100, 40, 200)
+data3 = np.random.normal(80, 40, 200)
+data4 = np.random.normal(80, 60, 200)
+
+plt.boxplot([data1, data2, data3, data4])
+x = np.linspace(0, 2*np.pi, 200)
+y = np.sin(x)
+plt.figure(figsize=(4.2, 3.6))
+plt.plot(x, y)
+x = np.linspace(0, 2*np.pi, 200)
+y = np.sin(x)
+plt.figure(figsize=(4.2, 3.6))
+plt.plot(x, y)
+plt.grid
+x = np.linspace(0, 2*np.pi, 200)
+y = np.sin(x)
+plt.figure(figsize=(4.2, 3.6))
+plt.plot(x, y)
+plt.grid(color='r', linestyle='dotted', linewidth=2)
+x = np.linspace(0, 2*np.pi, 200)
+y = np.sin(x)
+plt.figure(figsize=(4.2, 3.6))
+plt.plot(x, y)
+plt.grid(axis='x')
+import numpy as np
+
+np.random.seed(85)
+x = np.arange(0, 10)
+y1 = x * 2
+np.corrcoef(x, y1)
+x = np.arange(0, 10)
+y2 = x ** 2
+np.corrcoef(x, y2)
+np.random.seed(85)
+x - np.arange(0, 10)
+y3 = np.random.randint(0, 100, size=10)
+np.corrcoef(x, y3)
+result = np.corrcoef(((x, y2, y3)))
+print(result)
+import seaborn as sns
+import pandas as pd
+df = pd.DataFrame({'x': x, 'y2': y2, 'y3': y3})
+sns.pairplot(df)
+import seaborn as sns
+sns.set_theme(style="darkgrid")
+tips = sns.load_dataset("tips")
+sns.relplot(data=tips, x="total_bill", y="tip", col="time", hue="smoker", size="size")
+tips.head()
+tips.shape
+sns.histplot(tips['tip'], kde=False, bins=10)
+tips['tip_pct'] = 100 * tips['tip'] / tips['total_bill']
+sns.histplot(tips['tip_pct'], kde=True, bins=20)
+sns.relplot(x='total_bill', y='tip', data=tips)
+import seaborn as sns
+anscombe = sns.load_dataset("anscombe")
+print(anscombe.head())
+import seaborn as sns
+flights = sns.load_dataset('flights')
+flights.shape
+flights.head()
+import matplotlib.pyplot as plt
+plt.figure(figsize=(10, 3))
+sns.relplot(data=flights, x="year", y="passengers")
+plt.figure(figsize=(10, 3))
+sns.relplot(data=flights, x="year", y="passengers", kind='line')
+import numpy as np
+import pandas as pd
+
+se = pd.Series([1, 2, np.nan, 4 ]) # nan = 빈칸 (0이랑 다른개념)
+se
+se.isna()
+month_se = pd.Series(['1월', '2월', '3월', '4월'])
+income_se = pd.Series([9500, 6200, 6050, 7000])
+expense_se = pd.Series([5040, 2350, 2300, 4000])
+df = pd.DataFrame({'월': month_se, '수익': income_se, '지출': expense_se})
+df
+m_idx = np.argmax(income_se)
+print('최대 수익이 발생한 월:', month_se[m_idx])
+m_idx = np.argmax(income_se)
+print(m_idx)
+import numpy as np
+import pandas as np
+print('월 최대 수익:', income_se.max(),
+      ', 월 평균 수익:', income_se.mean())
+print(df)
+df.columns
+df.index
+df.loc['china'] #iloc 숫자 #loc 문자
+df['total'] = df.sum(axis = 1)
+print(df)
+import pandas as pd
+path = 'https://github.com/dongupak/DataML/raw/main/csv/' #6장시작!
+file = path+'vehicle_prod.csv'
+df = pd.read_csv(file)
+df.head()
+df['2007']
+df.columns.tolist()
+df['2007'].tolist()
+df = pd.read_csv(file, index_col=0)
+df['total'] = df.sum(axis=1)
+df
+df['mean']=df[['2007', '2008', '2009', '2010', '2011']].mean(axis=1)
+df
+df.drop('2007', inplace=True, axis=1)
+df
+df['total'] = df[['2008', '2009', '2010', '2011']].sum(axis=1)
+df['mean'] = df[['2008', '2009', '2010', '2011']].mean(axis=1)
+dfpath = 'https://github.com/dongupak/DataML/raw/main/csv/'
+file = path+'vehicle_prod.csv'
+df = pd.read_csv(file, index_col=0)
+df.drop('Mexico', axis=0, inplace=True)
+df
+df = pd.read_csv(file, index_col=0)
+df_no_index = pd.read_csv(file)
+print(df['2007'])
+print(df_no_index['2007'])
+df['2009'].plot(kind='bar'), color('orange', 'r', 'b', 'm', 'c', 'k')
+df['2009'].plot(kind='pie')
+path = 'https://github.com/dongupak/DataML/raw/main/csv/'
+file = path+'vehicle_prod.csv'
+df = pd.read_csv(file, index_col=0)
+df.plot.line()
+df =df.transpose()
+print(df)
+df.plot.line()
+df = pd.read_csv(file, index_col=0)
+df.head()
+df[2:6]
+df.loc[['Korea', 'US']]
+df['2011'][[0,4]]
+df.loc['Korea', '2011']
+df.head(3)['2009']
+df.iloc[4]
+df.iloc[2,4]
+df.iloc[[2,4]]
+df.iloc[[2,3],[1]]
+weather.mean()
+import pandas as pd
+df
+df_no_index
+path = 'https://github.com/dongupak/DataML/raw/main/csv/'
+weather_file = path+'weather.csv'
+weather = pd. read_csv(weather_file, index_col=0, encoding='CP949')
+print(weather.head(3))
+print('weather 데이터의 shape :', weather.shape)
+print(weather.describe())
+weather.count()
+missing_data = weather[ weather['평균풍속'].isna() ]
+print(missing_data)
+weather['평균풍속'].isna()
+weather.fillna(0, inplace = True)
+print(weather.loc['2012-02-11'])
+weather.fillna( weather['평균풍속'].mean(), inplace =True)
+print(weather.loc['2012-02-11'])
+d_list = ["01/03/2018", "01-03-2018", "2018-01-05", "2018/01/05"]
+pd.DatetimeIndex(d_list).year
+pd.DatetimeIndex(d_list).month
+pd.DatetimeIndex(d_list).day
+dt_list = ["01,03,2018 11:12:13", "01-03-2018 11:22:13"]
+pd.DatetimeIndex(dt_list).hour
+pd.DatetimeIndex(dt_list).minute
+weather = pd.read_csv(weather_file, encoding='CP949')
+weather['일시'] = pd.DatetimeIndex(weather['일시']).year
+weather
+import numpy as np
+import matplotlib as plt 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+path = 'https://github.com/dongupak/DataML/raw/main/csv/'
+weather_file = path+'weather.csv'
+weather = pd.read_csv(weather_file, encoding='CP949')
+weather['month'] = pd.DatetimeIndex(weather['일시']).month
+print(weather)
+weather
+monthly_means = weather.groupby('month').mean(numeric_only = True)
+print(monthly_means)
+monthly_means
+path = 'https://github.com/dongupak/DataML/raw/main/csv/'
+weather_file = path+'weather.csv'
+weather = pd.read_csv(weather_file, encoding='CP949')
+weather['year'] = pd.DatetimeIndex(weather['일시']).year
+print(weather)
+y_means = weather.groupby('year').mean(numeric_only=True)
+print(y_means)
+y_means = weather.groupby('year').max(numeric_only=True)
+print(y_means)
+monthly_means['평균풍속'] >= 4.0
+monthly_means [ monthly_means['평균풍속'] >= 4.0 ]
+import numpy as np
+import sklearn
+import numpy as np
+from sklearn import linear_model
+
+regr = linear_model.LinearRegression()
+x = [[163], [179], [169], [171]]
+y = [54, 63, 57, 56]
+regr.fit(x,y )
+import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+plt.scatter(x, y, color='blue', marker='D')
+y_pred = regr.predict(x)
+plt.plot(x, y_pred, 'r!')
+import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+plt.scatter(x, y, color='blue', marker='D')
+y_pred = regr.predict(x)
+plt.plot(x, y_pred, 'r') # Changed 'r!' to 'r' to plot a red line
+import numpy as np
+import sklearn as sk
+import pandas as pd
+path = 'https://github.com/dongupak/DataML/raw/main/csv/'
+file = path+'life_expectancy.csv'
+
+life = pd.read_csv(file)
+life.head(3)
+life.describe()
+life.columns
+import seaborn as sns
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+sns.set(rc={'figure.figsize':(22,20)})
+
+correlation_matrix = life.corr(numeric_only=True).round(2)
+sns.heatmap(data=correlation_matrix, annot=True)
+sns.heatmap(data=correlation_matrix, annot=True)
+life.corr(numeric_only=True).round(3)['Life expectancy']
+import pandas as pd
+
+life.dropna(inplace=True)
+
+main_features = 'Schooling', 'Income composition of resources', 'Adult mortality', 'BMI', 'HIV/AIDS'
+x = life[list(main_features)]
+y = life['Life expectancy']
+print(x.shape, y.shape)
+x.head()
+pip install scikit-learn
+import sklearn
+print(sklearn.__version__)
+
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+
+x_train, x_test, y_train, y_test = train_test_split(x,y, random_state=84, test_size=0.2)
+regr = LinearRegression()
+regr.fit(x_train, y_train)
+print('선형 회귀 모델의 정수=', regr.score(x_train, y_train))
+life.dropna(inplace=True)
+x = life[['Year', 'Adult mortality', 'Infant deaths', 'Alcohol', 'Percentage expenditure', 'Hepatitis B',
+          'Measles', 'BMI', 'Under-five deaths', 'Polio', 'Total expenditure', 'HIV/AIDS', 'GDP', 'Population',
+          'Thinness 1-19 years', 'Thinness 5-9 years', 'Income composition of resources', 'Schooling']]
+
+y = life['Life expectancy']
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+
+x_train, x_test, y_train, y_test = train_test_split(x,y, random_state=84, test_size=0.2)
+regr = LinearRegression()
+regr.fit(x_train, y_train)
+print('선형 회귀 모델의 정수=', regr.score(x_train, y_train))

@@ -1,0 +1,203 @@
+# 머신러닝
+# - 데이터 → ML 모델 → 학습을 통해서 규칙 생성
+# - ML모델의 알고리즘은 수학, 통계학, 컴퓨터, ...
+# - ML모델
+#   가. 분류(classification) K-NN, Decision Tree, RandomForest
+#   나. 수치 예측 XGboost
+#   다. 군집화(clustering) K-mean Clustering
+#   라. 이상값 감지
+
+# R을 활용한 머신러닝 기초 모델 실습 (with Iris Dataset)
+
+본 프로젝트는 R 언어를 활용하여 대표적인 머신러닝 모델을 실습한 코드입니다.  
+데이터는 `iris` 내장 데이터셋을 사용하였으며, 분류와 군집화 모델을 중심으로 학습 및 평가를 진행하였습니다.
+
+## 🔍 모델 목록
+
+1. **K-최근접 이웃(K-NN)**  
+   - 거리 기반 분류
+   - 다수결 방식으로 라벨 결정
+2. **의사결정나무(Decision Tree)**  
+   - 분기 기준을 통한 분류
+   - 시각화가 용이하고 해석 가능
+3. **랜덤 포레스트(Random Forest)**  
+   - 배깅 앙상블 기법 사용
+   - 다수 트리를 통해 예측 성능 향상
+4. **K-평균 군집화(K-Means Clustering)**  
+   - 비지도 학습
+   - 차원 축소 후 군집 시각화(`clusplot`)
+
+## 📊 사용 데이터
+
+- `iris` (내장 데이터셋, 150개 샘플, 3개 품종)
+
+## 📦 사용 패키지
+
+- class
+- rpart, rpart.plot
+- randomForest, caret
+- cluster
+
+## 📌 실습 목적
+
+- 머신러닝 분류/군집 기초 모델 구조 이해
+- 모델 학습 및 평가 실습
+- 비지도 학습의 평가 한계 인식
+
+# 1. K-NN 모델
+# 가. 분류하고 싶은 값과 기존의 아이템들간의
+#     유클리드거리(최단직선거리)를 계산
+# 나. K개의 최근접 이웃을 선택
+# 다. 선택된 이웃의 다수결 카테고리로 분류
+# -단점 : 데이터의 n수가 작은 경우 성능 좋지 않음
+#         데이터의 범위를 넘어가는 값을 분류하는 경우
+#         항상 동일한 카테고리로 분류되는 문제 생김
+
+library(class)
+
+# 데이터를 훈련용(Train) / 평가용(Test) 분할
+# - Train은 모델 학습에만 사용
+# - Test는 모델 평가에만 사용(평가 신뢰도 향상)
+# - 데이터 분할(단순 비율 분할 금지!, 랜덤 금지!)
+# - 층화추출(골고루 뽑기)
+
+tr.idx <- c(1:25, 51:75, 101:125) # Train Index
+ds.tr <- iris[tr.idx, 1:4] # Train Data(75건)
+ds.ts <- iris[-tr.idx, 1:4] #Test Data(75건)
+cl.tr <- factor(iris[tr.idx, 5]) # Train Label(정답)
+cl.ts <- factor(iris[-tr.idx, 5]) # Test Lable(정답)
+
+pred <- knn(ds.tr, ds.ts, cl.tr, k=3, prob=TRUE)
+pred
+
+acc <- mean(pred==cl.ts)
+acc
+
+# 혼동 행렬
+table(pred, cl.ts)
+
+# 2. Decision Tree(의사결정 나무) 모델
+# - 장점
+# 가. 모델 해석이 쉬움(xAI)
+# 나. 데이터셋이 작건 크건 사용 가능 ( 범용 분류기 )
+# - 단점
+# 가. 모델이 복잡하면 해석이 어려움
+# 나. 하나의 특징만을 고려해서 모델이 학습함...
+install.packages("rpart")
+install.packages("rpart.plot")
+
+library(rpart)
+library(rpart.plot)
+
+data(iris)
+
+# 지도학습 = 데이터 + 정답
+# 1. 분류 : 정해진 카테고리로 분류
+# 2. 예측 : 정확한 수치를 예측
+tree_model <- rpart(Species ~ Sepal.Length +
+                      Sepal.Width +
+                      Petal.Length +
+                      Petal.Width, 
+                    data = iris, 
+                    method = "class")
+
+rpart.plot(tree_model, main="Decision Tree")
+
+# 3. 랜덤 포레스트
+# - 앙상블 기법
+#   L 배깅: RandomForest
+#   L 보팅
+#   L 스테킹
+#   L 부스팅 : XGboost
+# - 배깅
+# + 부트스트랩을 사용해서 데이터를 샘플링하고
+# + 동일한 Decision Tree 모델을 사용
+
+# 앙상블 의미 x
+# 데이터 → 모델1 → 결과
+# 데이터 → 모델2 → 결과
+# 데이터 → 모델3 → 결과
+
+# 모델이 동일한 경우에는 학습데이터를 상이하게 줘야함
+# → 부트스트랩(랜덤 복원 샘플링)
+
+install.packages("randomForest")
+install.packages("caret")
+
+library(randomForest)
+library(caret)
+
+data(iris)
+
+# 데이터 분활(Train / Test)
+set.seed(42) # 재현성을 위한 난수값 설정
+train_index <- createDataPartition(iris$Species,
+                                   p=0.8,
+                                   list=FALSE)
+train_data <- iris[train_index, ]
+test_data <- iris[-train_index, ]
+
+rf_model <- randomForest(Species ~
+                           Sepal.Length +
+                           Sepal.Width +
+                           Petal.Length +
+                           Petal.Width,
+                         data = train_data,
+                         importance = TRUE)
+
+# 학습 완료된 모델 예측
+rf_predictions <- predict(rf_model, test_data) 
+
+# 성능 평가
+rf_confusion_matrix <- confusionMatrix(
+  factor(rf_predictions),
+  factor(test_data$Species)
+)
+print(rf_confusion_matrix)
+
+# 4. K-Means Clustering
+# - 비지도 학습
+# - 머신러닝 기법
+# - 비지도학습은 일반적으로 딥러닝 학습 불가 
+#   → 에측값과 정답의 오차를 계산
+#   오차를 바탕으로 모델을 업데이트 해야하는데
+#   비지도 학습은 정답이 없기 때문에 오차를 계산할 수 없음!
+#   → 딥클러스터링과 같은 기법들은 확률분포를 사용하여
+#     가상의 정답을 만들고 오차를 계산해서 비지도학습을 딥러닝으로 학습 가능!
+#     대표 DEC 모델
+# 비지도학습의 비애...
+# - 정답이 없기 때문에 평가가 어려워요..
+# - 분류는 맞췄다 틀렸다로 평가가 가능하지만..
+# - 군집화는 모델이 비슷하다고 생각되는 특징들을 묶었기 떄문에
+#   모델이 지금 잘 작동하는지 유무를 구분을 하기 매우 어려움..
+# - 그래서 대부분의 군집화 모델의 평가는 
+# 하나의 클러스터 안에 잡음이 얼마나 섞여 있나?
+# 또는 클러스터A와 클러스터B의 거리가 얼마나 먼가?
+# 와 같이.. 원념적인 평가만 가능 OTL..
+
+# 요즘 인공지능 트렌드
+# 1. 멀티 모달 데이터를 사용!
+# 2. 지도 + 비지도 + 강화 섞어서 사용!
+# 3. 경량화! 
+#    L on Deviece AI
+#    L LLM모델의 한계...
+
+data(iris)
+
+mydata <- iris[, 1:4]
+
+# k=3인 클러스터링 모델델
+fit <- kmeans(x=mydata, centers=3)
+fit$centers
+fit$cluster
+
+# 차원축소 후 군집 시각화
+# t-SNE
+library(cluster)
+clusplot(mydata, fit$cluster, color=TRUE, shade=TRUE,
+         labels=2, lines=0)
+
+# 데이터에서 두 번째 군집의 데이터만 추출
+subset(mydata, fit$cluster==2)
+
+
