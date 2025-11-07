@@ -1,0 +1,303 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+# 1. Colab 파일 업로드 - 컴퓨터에 있는 CSV 파일이나 Excel 파일(매출 데이터 등)을 Colab으로 불러오기 위해서
+from google.colab import files
+uploaded = files.upload()
+#경기도민 카드매출 2025년 3월 데이터
+# 2. 데이터프레임 불러오기 - card_gyeonggi_202503.csv라는 CSV 형식의 매출 데이터를 판다스(Pandas)로 불러와서 분석을 시작하기 위해서
+import pandas as pd
+df = pd.read_csv('card_gyeonggi_202503.csv')  # 업로드한 파일명 그대로
+# 3. 컬럼명 정리 (공백 제거 + 한글로 변경) - 1. 분석에 앞서 컬럼명을 이해하기 쉽게 바꾸기 위해서 2. 공백 문제 방지
+df.columns = df.columns.str.strip()  # 혹시 모를 공백 제거
+df = df.rename(columns={
+    'ta_ymd': '년월일',
+    'card_tpbuz_nm_2': '업종분류',
+    'sex': '성별',
+    'age': '연령대',
+    'day': '요일',
+    'amt': '매출금액',
+    'cnt': '매출건수'
+})
+# 4. 매출금액이 숫자인지 확인하고 변환 (문자열인 경우 대비) - 데이터를 불러올 때 매출금액 같은 숫자 열이 문자열(string)로 들어오는 경우가 종종 있어서 숫자로 강제로 변환
+df['매출금액'] = pd.to_numeric(df['매출금액'], errors='coerce')
+# 5. 연령대, 요일, 성별 값 해석 추가 (옵션) - 데이터를 사람이 보기 쉽게 바꾸는 작업, 즉 "해석 가능하도록 전처리" 하는 단계
+# 전처리 (데이터 품질 향상, 데이터 형식 통일, 모델 성능 최적화, 분석 효율성 증대)
+df['연령대'] = df['연령대'].map({
+    1: '10대', 2: '20대', 3: '30대', 4: '40대',
+    5: '50대', 6: '60대', 7: '70대', 8: '80대',
+    9: '90대', 10: '100대 이상', 11: '기타'
+})
+
+df['요일'] = df['요일'].map({
+    1: '월요일', 2: '화요일', 3: '수요일',
+    4: '목요일', 5: '금요일', 6: '토요일', 7: '일요일'
+})
+
+df['성별'] = df['성별'].map({'M': '남성', 'F': '여성'})# 한글 폰트 경로 설정
+# Matplotlib의 기본 설정은 한글을 지원하지 않으므로, 한글 폰트를 명시적으로 지정하지 않으면 한글 텍스트가 깨지거나(□로 표시됨) 제대로 렌더링되지 않을 수 있습니다.
+# 이 코드는 시스템에 설치된 한글 폰트(예: 나눔고딕)를 Matplotlib에 적용하여 한글 출력 문제를 해결합니다
+import matplotlib.font_manager as fm
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+
+font_path = '/usr/share/fonts/truetype/nanum/NanumGothic.ttf'
+nanum_font = fm.FontProperties(fname=font_path).get_name()
+plt.rcParams['font.family'] = nanum_font
+mpl.rcParams['axes.unicode_minus'] = False
+print("✅ 폰트 적용 완료:", nanum_font)
+# 6. 한글 폰트 설정
+!apt-get -qq install fonts-nanum > /dev/null
+import matplotlib.font_manager as fm
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+
+fontpath = '/usr/share/fonts/truetype/nanum/NanumGothic.ttf'
+font = fm.FontProperties(fname=fontpath)
+plt.rc('font', family=font.get_name())
+plt.rcParams['axes.unicode_minus'] = False
+# 7. 히스토그램 시각화 - 패턴을 직관적으로 이해
+plt.figure(figsize=(10,6))
+# Use the main DataFrame 'df' instead of the undefined 'filtered_df'
+sns.histplot(df['매출금액'], kde=True)
+plt.title("매출금액 분포 (원래 스케일)")
+plt.xlabel("매출금액")
+plt.ylabel("빈도수")
+plt.xlim(0, 5000000)  # 너무 큰 값 잘라보기 (옵션)
+plt.show()
+# 매출금액이 유효한 (양수인) 값만 필터링 - 매출금액 데이터의 분포를 로그 스케일로 시각화
+filtered_df = df[df['매출금액'] > 0].copy()
+
+# 로그 변환 후 히스토그램
+plt.figure(figsize=(10,6))
+sns.histplot(np.log1p(filtered_df['매출금액']), kde=True)
+plt.title("매출금액 분포 (로그 스케일)")
+plt.xlabel("log(매출금액)")
+plt.ylabel("빈도수")
+plt.show()
+# 요일별 평균 매출금액 - 기본적 패턴 확인
+요일별_매출 = df[df['매출금액'] > 0].groupby('요일')['매출금액'].mean().sort_index()
+
+plt.figure(figsize=(10,6))
+sns.barplot(x=요일별_매출.index, y=요일별_매출.values)
+plt.title("요일별 평균 매출금액")
+plt.xlabel("요일")
+plt.ylabel("평균 매출금액 (원)")
+plt.show()
+#업종별 매출건수 Top 10 - 시장 비중 확인
+업종별_건수 = df.groupby('업종분류')['매출건수'].sum().sort_values(ascending=False).head(10)
+
+plt.figure(figsize=(12,6))
+sns.barplot(x=업종별_건수.values, y=업종별_건수.index)
+plt.title("업종별 매출건수 Top 10")
+plt.xlabel("매출건수")
+plt.ylabel("업종분류")
+plt.show()
+#성별·연령대별 평균 매출금액 - 타깃층 분석
+성연령별 = df[df['매출금액'] > 0].groupby(['성별', '연령대'])['매출금액'].mean().reset_index()
+
+plt.figure(figsize=(12,6))
+sns.barplot(data=성연령별, x='연령대', y='매출금액', hue='성별')
+plt.title("성별·연령대별 평균 매출금액")
+plt.xlabel("연령대")
+plt.ylabel("평균 매출금액 (원)")
+plt.legend(title='성별')
+plt.show()
+#날짜별 총 매출금액 추이 (시계열) - 트렌드 분
+df['년월일'] = pd.to_datetime(df['년월일'], format='%Y%m%d', errors='coerce')  # 날짜형으로 변환
+
+날짜별_매출 = df.groupby('년월일')['매출금액'].sum().reset_index()
+
+plt.figure(figsize=(14,6))
+sns.lineplot(data=날짜별_매출, x='년월일', y='매출금액')
+plt.title("일자별 매출금액 추이")
+plt.xlabel("날짜")
+plt.ylabel("총 매출금액 (원)")
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+# 데이터프레임의 상위 5개 행을 출력해서 데이터의 구조와 내용을 빠르게 확인
+print(df.head())
+# 시각화 목적을 위해 시간대라는 가상의 컬럼을 설정 → 분석 예시를 보여주기 위해 임의로(랜덤하게) 시간 데이터를 만들어줌
+import pandas as pd
+
+# 날짜 컬럼 변환
+df['년월일'] = pd.to_datetime(df['년월일'])
+
+# 시간대 추출용: '결제시간'이 없으므로, 랜덤 생성 (참고용), 실제로는 시간 정보 없으면 제외 가능
+# 예시용으로 '시간대' 컬럼을 만들어 놓음 (아래 히트맵에 쓰기 위함)
+import numpy as np
+np.random.seed(42)
+df['시간대'] = np.random.choice(range(0, 24), size=len(df))  # 임시 시간대 생성
+#요일-시간대 조합별 매출 히트맵 - 고객 방문 패턴을 파악하기 위해!
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
+
+# 히트맵 데이터 생성
+heatmap_data = df.groupby(['요일', '시간대'])['매출금액'].mean().unstack()
+
+# 시각화
+plt.figure(figsize=(12, 6))
+sns.heatmap(heatmap_data, cmap='YlGnBu', annot=True, fmt=".0f")
+plt.title('요일 + 시간대별 평균 매출금액')
+plt.xlabel('시간대')
+plt.ylabel('요일')
+plt.show()
+#업종별 요일별 평균 매출금액 - 업종마다 요일별 매출 패턴 차이를 파악하기 위해
+pivot = df.groupby(['업종분류', '요일'])['매출금액'].mean().reset_index()
+
+plt.figure(figsize=(14, 6))
+sns.lineplot(data=pivot, x='요일', y='매출금액', hue='업종분류')
+plt.title('업종별 요일별 평균 매출금액')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+#업종별 성별/연령대별 평균 매출금액 - 성별에 따라 어떤 업종에 돈을 더 쓰는지 비교 / 연령대에 따라 어떤 업종에 소비가 집중되는지 확인
+grouped = df.groupby(['업종분류', '성별', '연령대'])['매출금액'].mean().reset_index()
+
+plt.figure(figsize=(16, 6))
+sns.barplot(data=grouped, x='업종분류', y='매출금액', hue='성별')
+plt.title('업종별 성별 평균 매출금액')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+plt.figure(figsize=(16, 6))
+sns.barplot(data=grouped, x='업종분류', y='매출금액', hue='연령대')
+plt.title('업종별 연령대 평균 매출금액')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+#날짜별 매출금액 분포 + 이상치 탐색 - 요일별 매출금액의 분포가 어떻게 생겼는지 보고, 특이한 값(이상치)이 있는지 확인하기 위해
+plt.figure(figsize=(14, 6))
+sns.boxplot(data=df, x='요일', y='매출금액')
+plt.title('요일별 매출금액 분포 (이상치 탐색)')
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+# 업종별 매출건수 대비 매출금액 산점도 -  1.“매출건수가 많다고 항상 매출금액도 높을까?” 2.“어떤 업종이 효율적으로 높은 금액을 발생시키는가?”
+plt.figure(figsize=(10, 6))
+sns.scatterplot(data=df, x='매출건수', y='매출금액', hue='업종분류')
+plt.title('업종별 매출건수 vs 매출금액')
+plt.tight_layout()
+plt.show()
+import numpy as np
+np.random.seed(42)
+df['시간대'] = np.random.choice(range(0, 24), size=len(df))
+# 회귀 분석 - 수치형 데이터를 다른 변수로 설명하거나 예측할 때 사용
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import make_pipeline
+from sklearn.metrics import mean_squared_error
+
+# 분석용 데이터 준비
+features = ['요일', '시간대', '성별', '연령대', '업종분류']
+target = '매출금액'
+
+# 결측 제거
+df_reg = df[features + [target]].dropna()
+
+# 학습/테스트 분할
+X = df_reg[features]
+y = df_reg[target]
+
+# 범주형 데이터 인코딩
+preprocessor = ColumnTransformer([
+    ('cat', OneHotEncoder(handle_unknown='ignore'), features)
+])
+
+# 모델 구성
+model = make_pipeline(preprocessor, LinearRegression())
+
+# 학습/예측
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+
+# 결과 확인
+mse = mean_squared_error(y_test, y_pred)
+print("📉 평균제곱오차 (MSE):", round(mse, 2))
+# 예측분석 - 예를 들어, 어떤 업종의 매출이 특정 요일·시간대·연령대·성별에서 높을지를 예측하는
+# 새로운 입력값 예시
+new_data = pd.DataFrame([{
+    '요일': '금요일',
+    '시간대': 14,
+    '성별': '여성',
+    '연령대': '30대',
+    '업종분류': '가전제품'
+}])
+
+# 예측
+predicted_sales = model.predict(new_data)
+print("💰 예측 매출금액:", round(predicted_sales[0], 2), "원")
+!pip install xgboost # xgboost(학습기반 머신러닝) 설치
+# XGBOOST (복잡한 패턴 우수, 범주형 데이터 처리에 강함 과적합 방지기능 내장, 대용량 데이터 처리효율적 등)
+#  XGBoost를 이용한 매출금액 예측 전체 코드
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from xgboost import XGBRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+import numpy as np
+
+# ✅ 필수: 연령대, 요일, 성별 등 범주형 변수는 문자열로 되어 있어야 함
+df_model = df.copy()
+
+# ✅ 범주형 변수 라벨 인코딩
+label_cols = ['요일', '성별', '연령대', '업종분류']
+for col in label_cols:
+    df_model[col] = LabelEncoder().fit_transform(df_model[col])
+
+# ✅ 입력 특성과 타깃 정의
+X = df_model[['요일', '성별', '연령대', '업종분류']]
+y = df_model['매출금액']
+
+# ✅ 학습/테스트 분할
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# ✅ XGBoost 회귀 모델 정의 및 학습
+model = XGBRegressor(n_estimators=100, learning_rate=0.1, random_state=42)
+model.fit(X_train, y_train)
+
+# ✅ 예측
+y_pred = model.predict(X_test)
+
+# ✅ 평가 지표 출력
+rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+r2 = r2_score(y_test, y_pred)
+
+print(f"✅ RMSE: {rmse:,.0f}") # RMSE : 예측값과 실제값의 평균 오차 크기 (낮을수록 좋음)
+print(f"✅ R² Score: {r2:.4f}") # R² Score: 1에 가까울수록 설명력이 높음
+#변수 중요도 시각
+import matplotlib.pyplot as plt
+from xgboost import plot_importance
+
+plt.figure(figsize=(10, 6))
+plot_importance(model, height=0.5, importance_type='gain')  # 'gain', 'weight', 'cover' 중 선택 가능
+plt.title('📊 변수 중요도 (XGBoost 기준)')
+plt.show()
+# **‘gain’**은 해당 변수가 예측 정확도 향상에 기여한 정도를 의미
+# 예측값 vs 실제값 그래프
+plt.figure(figsize=(8, 6))
+plt.scatter(y_test, y_pred, alpha=0.3)
+plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--')  # 대각선 기준선
+plt.xlabel('실제 매출금액')
+plt.ylabel('예측 매출금액')
+plt.title('🎯 예측값 vs 실제값')
+plt.tight_layout()
+plt.show()
+#점들이 대각선에 가까울수록 모델의 예측이 실제값과 유사하다는 의미
+# MSE 계산
+from sklearn.metrics import mean_squared_error
+mse = mean_squared_error(y_test, y_pred)
+print(f"XGBoost 모델 MSE: {mse:.2f}")
+# RMSE 계산 (MSE의 제곱근)
+rmse = np.sqrt(mse)
+print(f"XGBoost 모델 RMSE: {rmse:.2f}")# RMSE 계산 (MSE의 제곱근)
+rmse = np.sqrt(mse)
+print(f"XGBoost 모델 RMSE: {rmse:.2f}")
