@@ -1,0 +1,113 @@
+"""
+04. 돼지고기 생산자물가(PPI)와 소비자물가(CPI)의 선후관계 분석
+
+- 전년동월비 교차상관: corr(PPI_yoy(t), CPI_yoy(t+k)), k > 0이면 PPI 선행
+- 월별 로그차분 기준 양방향 Granger 인과검정 (lag 1~4)
+- 전년동월비 추이 차트
+
+실행 (저장소 루트에서):
+    python 04_pork_ppi_cpi/pork_ppi_cpi.py \
+        --ppi data/생산자물가지수_품목별_돼지고기.csv \
+        --cpi data/소비자물가지수_돼지고기.csv
+"""
+
+import argparse
+import warnings
+from pathlib import Path
+
+import matplotlib
+import matplotlib.font_manager as fm
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from statsmodels.tsa.stattools import grangercausalitytests
+
+warnings.filterwarnings("ignore")
+
+ROOT = Path(__file__).resolve().parent.parent
+OUT_DIR = ROOT / "outputs"
+
+
+def to_series(path: Path, name: str) -> pd.Series:
+    """ECOS wide 형식 CSV의 첫 번째 데이터 행을 월별 시계열로 변환."""
+    df = pd.read_csv(path, encoding="utf-8-sig")
+    row = df.iloc[0]
+    date_cols = [c for c in df.columns if "/" in str(c)]
+    values = [float(str(row[c]).replace(",", "")) for c in date_cols]
+    idx = pd.to_datetime(date_cols, format="%Y/%m")
+    return pd.Series(values, index=idx, name=name)
+
+
+def cross_correlation(yoy: pd.DataFrame, max_k: int = 6) -> pd.DataFrame:
+    rows = []
+    for k in range(0, max_k + 1):
+        corr = yoy["PPI"].corr(yoy["CPI"].shift(-k))
+        rows.append({"k (PPI 선행 개월)": k, "상관계수": round(corr, 3)})
+    return pd.DataFrame(rows)
+
+
+def granger_pvalues(d: pd.DataFrame, effect: str, cause: str, maxlag: int = 4) -> pd.DataFrame:
+    """cause → effect 방향 Granger 검정 (ssr F-test p-value)."""
+    res = grangercausalitytests(d[[effect, cause]], maxlag=maxlag, verbose=False)
+    return pd.DataFrame(
+        {"lag": list(res.keys()),
+         "p_value": [round(res[lag][0]["ssr_ftest"][1], 4) for lag in res]}
+    )
+
+
+def set_korean_font() -> None:
+    candidates = [f for f in fm.findSystemFonts() if "nanum" in f.lower()
+                  or "malgun" in f.lower() or "applegothic" in f.lower()]
+    if candidates:
+        fm.fontManager.addfont(candidates[0])
+        matplotlib.rcParams["font.family"] = fm.FontProperties(fname=candidates[0]).get_name()
+    matplotlib.rcParams["axes.unicode_minus"] = False
+
+
+def plot_yoy(yoy: pd.DataFrame, out_path: Path) -> None:
+    set_korean_font()
+    fig, ax = plt.subplots(figsize=(10, 5))
+    ax.plot(yoy.index, yoy["PPI"], label="PPI pork (YoY %)", lw=2)
+    ax.plot(yoy.index, yoy["CPI"], label="CPI pork (YoY %)", lw=2)
+    ax.axhline(0, color="gray", lw=0.8)
+    start = yoy.index.min().strftime("%Y.%m")
+    end = yoy.index.max().strftime("%Y.%m")
+    ax.set_title(f"Pork PPI vs CPI, YoY growth ({start}-{end})")
+    ax.legend()
+    ax.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150)
+    plt.close(fig)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ppi", required=True, help="돼지고기 PPI CSV 경로")
+    parser.add_argument("--cpi", required=True, help="돼지고기 CPI CSV 경로")
+    parser.add_argument("--maxlag", type=int, default=4)
+    args = parser.parse_args()
+
+    OUT_DIR.mkdir(exist_ok=True)
+
+    df = pd.concat(
+        [to_series(Path(args.ppi), "PPI"), to_series(Path(args.cpi), "CPI")], axis=1
+    ).dropna()
+    print(f"표본: {df.index.min():%Y-%m} ~ {df.index.max():%Y-%m} (n={len(df)})\n")
+
+    yoy = df.pct_change(12).dropna() * 100
+    print("=== 전년동월비 교차상관 ===")
+    print(cross_correlation(yoy).to_string(index=False))
+
+    d = np.log(df).diff().dropna()
+    print("\n=== Granger: PPI → CPI ===")
+    print(granger_pvalues(d, effect="CPI", cause="PPI", maxlag=args.maxlag).to_string(index=False))
+    print("\n=== Granger: CPI → PPI ===")
+    print(granger_pvalues(d, effect="PPI", cause="CPI", maxlag=args.maxlag).to_string(index=False))
+
+    out_png = OUT_DIR / "04_pork_ppi_cpi.png"
+    plot_yoy(yoy, out_png)
+    print(f"\n차트 저장: {out_png}")
+
+
+if __name__ == "__main__":
+    main()
