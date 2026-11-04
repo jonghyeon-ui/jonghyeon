@@ -1,0 +1,128 @@
+"""
+05. 보유종목 익절·손절 감시 + 텔레그램 알림
+
+- yfinance로 10분 주기 현재가 조회
+- 수익률이 TAKE_PROFIT 이상 또는 STOP_LOSS 이하이면 텔레그램 알림
+- 주말·장외 시간(09:00 이전, 15:40 이후)은 1시간 대기
+- 가격 NaN 처리, 동일 종목 알림은 1시간 1회로 제한, 요청 timeout 5초
+
+설정:
+    1) 05_portfolio_monitor/.env.example을 .env로 복사 후 토큰 입력
+    2) portfolio.json.example을 portfolio.json으로 복사 후 보유종목 입력
+실행 (저장소 루트에서):
+    python 05_portfolio_monitor/portfolio_monitor.py
+"""
+
+import json
+import os
+import time
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
+import requests
+import yfinance as yf
+from dotenv import load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
+
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
+TAKE_PROFIT = 0.07   # 익절 기준 +7%
+STOP_LOSS = -0.05    # 손절 기준 -5%
+CHECK_INTERVAL = 600         # 장중 조회 주기(초)
+OFF_HOURS_INTERVAL = 3600    # 장외 대기(초)
+ALERT_COOLDOWN = 3600        # 동일 종목 재알림 간격(초)
+
+
+def load_portfolio() -> dict:
+    path = BASE_DIR / "portfolio.json"
+    if not path.exists():
+        path = BASE_DIR / "portfolio.json.example"
+        print("portfolio.json 없음: 예시 파일로 실행")
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def send_telegram(msg: str) -> None:
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    try:
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        requests.post(url, data={"chat_id": TELEGRAM_CHAT_ID, "text": msg}, timeout=5)
+    except requests.RequestException as e:
+        print(f"텔레그램 전송 실패: {e}")
+
+
+def is_market_open(now: datetime) -> bool:
+    if now.weekday() >= 5:
+        return False
+    if now.hour < 9:
+        return False
+    if now.hour > 15 or (now.hour == 15 and now.minute > 40):
+        return False
+    return True
+
+
+def get_price(ticker: str):
+    df = yf.download(ticker, period="1d", progress=False, auto_adjust=True)
+    if df.empty:
+        return None
+    close = df["Close"]
+    if isinstance(close, pd.DataFrame):  # yfinance 버전에 따라 MultiIndex 열로 반환됨
+        close = close.iloc[:, 0]
+    price = close.iloc[-1]
+    if pd.isna(price):
+        return None
+    return int(price)
+
+
+def main() -> None:
+    portfolio = load_portfolio()
+    sent_alerts: dict[str, datetime] = {}
+    print("포트폴리오 감시 시작")
+
+    while True:
+        now = datetime.now()
+
+        if not is_market_open(now):
+            print(f"[{now:%H:%M}] 장외 시간 - 1시간 후 재확인")
+            time.sleep(OFF_HOURS_INTERVAL)
+            continue
+
+        for name, info in portfolio.items():
+            try:
+                price = get_price(info["ticker"])
+                if price is None:
+                    print(f"[{now:%H:%M}] {name} 가격 없음 - 스킵")
+                    continue
+
+                ret = price / info["매입가"] - 1
+                status = f"[{now:%H:%M}] {name} | {price:,}원 | {ret * 100:.2f}%"
+
+                if ret >= TAKE_PROFIT:
+                    signal = "익절"
+                elif ret <= STOP_LOSS:
+                    signal = "손절"
+                else:
+                    print(f"대기 {status}")
+                    continue
+
+                last = sent_alerts.get(name)
+                if last is None or (now - last).total_seconds() > ALERT_COOLDOWN:
+                    msg = f"{signal} 신호 {status}"
+                    print(msg)
+                    send_telegram(msg)
+                    sent_alerts[name] = now
+
+            except Exception as e:  # 네트워크 오류 등은 다음 주기에 재시도
+                print(f"{name} 오류: {e}")
+
+        print(f"--- [{now:%H:%M}] {CHECK_INTERVAL // 60}분 후 재확인 ---")
+        time.sleep(CHECK_INTERVAL)
+
+
+if __name__ == "__main__":
+    main()
