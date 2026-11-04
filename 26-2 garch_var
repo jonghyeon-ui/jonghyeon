@@ -1,0 +1,140 @@
+# =============================================================
+# 03. 유가 변동성 GARCH(1,1) + 4변수 VAR(2)
+#     - 일별 두바이유 로그수익률 GARCH(1,1)
+#     - VAR(2): 유가 → 환율 → PPI → 근원CPI (로그차분, 월별)
+#     - VAR(2): 유가 → 환율 → PPI → 헤드라인CPI
+#     - 안정성(고유근), Granger 인과검정, IRF, FEVD
+#     - 추정결과 전체를 txt로 저장
+# 실행: 저장소 루트를 작업 디렉터리로 두고 source()
+# =============================================================
+
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(tseries)
+  library(vars)
+  library(rugarch)
+})
+source("R/ecos_utils.R")
+
+# ---------------- CONFIG ----------------
+DATA_DIR <- "data"
+OUT_DIR  <- "outputs"
+
+FILE_OIL_DAILY <- file.path(DATA_DIR, "국제_원유가격.csv")
+FILE_ER        <- file.path(DATA_DIR, "원화의_대미달러_환율.csv")
+FILE_PPI       <- file.path(DATA_DIR, "생산자물가지수_품목별.csv")
+FILE_CPI       <- file.path(DATA_DIR, "소비자물가지수_특수분류.csv")
+
+KEY_PPI      <- "총지수"
+KEY_CPI      <- "총지수"
+KEY_CORE_CPI <- "농산물및석유류제외지수"
+VAR_P        <- 2
+# ----------------------------------------
+
+dir.create(OUT_DIR, showWarnings = FALSE)
+
+# 1. 데이터 로딩
+oil_daily <- read_oil_daily(FILE_OIL_DAILY)
+oil       <- oil_monthly(oil_daily)
+er        <- read_er(FILE_ER)
+ppi       <- read_ecos_wide(FILE_PPI, key_col = 2, key_value = KEY_PPI, out_name = "ppi")
+cpi       <- read_ecos_wide(FILE_CPI, key_col = 2, key_value = KEY_CPI, out_name = "cpi")
+core_cpi  <- read_ecos_wide(FILE_CPI, key_col = 2, key_value = KEY_CORE_CPI,
+                            out_name = "core_cpi")
+
+# 2. 병합 + 로그차분(전월대비 변화율, %)
+df <- purrr::reduce(list(oil, er, ppi, core_cpi, cpi),
+                    ~ full_join(.x, .y, by = "date")) |>
+  arrange(date) |>
+  drop_na() |>
+  mutate(across(c(oil, er, ppi, core_cpi, cpi),
+                ~ c(NA, diff(log(.x)) * 100),
+                .names = "d_{.col}")) |>
+  drop_na()
+
+cat("월별 표본:", format(min(df$date)), "~", format(max(df$date)),
+    "/ n =", nrow(df), "\n\n")
+
+# 3. ADF 단위근 검정 (로그차분 변수)
+cat("=== ADF 단위근 검정 (로그차분, p-value) ===\n")
+for (v in c("d_oil", "d_er", "d_ppi", "d_core_cpi", "d_cpi")) {
+  cat(sprintf("%-11s %.4f\n", v, suppressWarnings(adf.test(df[[v]])$p.value)))
+}
+
+# 4. VAR(2) 두 개
+X_core <- df |> select(d_oil, d_er, d_ppi, d_core_cpi) |> as.matrix()
+X_head <- df |> select(d_oil, d_er, d_ppi, d_cpi) |> as.matrix()
+
+cat("\n=== 시차 선택 (근원 모형) ===\n")
+print(VARselect(X_core, lag.max = 6, type = "const")$selection)
+
+var_fit <- VAR(X_core, p = VAR_P, type = "const")
+var_hd  <- VAR(X_head, p = VAR_P, type = "const")
+
+# 5. IRF: PPI 충격에 대한 누적 반응
+irf_core <- irf(var_fit, impulse = "d_ppi", response = "d_core_cpi",
+                n.ahead = 12, cumulative = TRUE, boot = TRUE, ci = 0.95)
+irf_head <- irf(var_hd, impulse = "d_ppi", response = "d_cpi",
+                n.ahead = 12, cumulative = TRUE, boot = TRUE, ci = 0.95)
+
+png(file.path(OUT_DIR, "03_irf_ppi_to_core_cpi.png"), width = 900, height = 600)
+plot(irf_core, main = "Cumulative IRF: PPI shock -> core CPI")
+dev.off()
+png(file.path(OUT_DIR, "03_irf_ppi_to_cpi.png"), width = 900, height = 600)
+plot(irf_head, main = "Cumulative IRF: PPI shock -> headline CPI")
+dev.off()
+
+# 6. GARCH(1,1) - 일별 로그수익률(%)
+oil_ret <- oil_daily |>
+  mutate(ret = c(NA, diff(log(oil)) * 100)) |>
+  drop_na()
+
+spec <- ugarchspec(
+  variance.model     = list(model = "sGARCH", garchOrder = c(1, 1)),
+  mean.model         = list(armaOrder = c(0, 0), include.mean = TRUE),
+  distribution.model = "norm"
+)
+garch_fit <- ugarchfit(spec = spec, data = oil_ret$ret)
+
+# 조건부 변동성 시계열 저장 및 그래프
+vol <- tibble(date = oil_ret$date, sigma = as.numeric(sigma(garch_fit)))
+write_csv(vol, file.path(OUT_DIR, "03_garch_conditional_vol.csv"))
+
+png(file.path(OUT_DIR, "03_garch_conditional_vol.png"), width = 1000, height = 500)
+plot(vol$date, vol$sigma, type = "l",
+     main = "Dubai oil: GARCH(1,1) conditional volatility (%)",
+     xlab = "", ylab = "sigma (%)")
+dev.off()
+
+# 7. 결과 저장 - GARCH
+sink(file.path(OUT_DIR, "03_GARCH_결과.txt"))
+cat("===== GARCH(1,1) 추정 결과 =====\n")
+cat("데이터: 일별 두바이유 로그수익률 (%)\n")
+cat("표본기간:", format(min(oil_ret$date)), "~", format(max(oil_ret$date)), "\n\n")
+print(garch_fit)
+sink()
+
+# 8. 결과 저장 - VAR
+sink(file.path(OUT_DIR, "03_VAR_결과.txt"))
+cat("===== VAR(", VAR_P, ") 추정 결과 =====\n", sep = "")
+cat("변수: 유가, 환율, PPI, 근원CPI (로그차분, 월별)\n")
+cat("표본기간:", format(min(df$date)), "~", format(max(df$date)),
+    "(n =", nrow(df), ")\n\n")
+
+cat("\n--- 1) VAR 추정 ---\n\n")
+print(summary(var_fit))
+
+cat("\n\n--- 2) 안정성 (고유근, 모두 1 미만이면 안정) ---\n\n")
+print(roots(var_fit))
+
+cat("\n\n--- 3) Granger 인과검정 (PPI → 다른 변수들) ---\n\n")
+print(causality(var_fit, cause = "d_ppi")$Granger)
+
+cat("\n\n--- 4) FEVD 12개월 (근원 CPI 분산분해) ---\n\n")
+print(fevd(var_fit, n.ahead = 12)$d_core_cpi)
+
+cat("\n\n--- 5) FEVD 12개월 (헤드라인 CPI 분산분해) ---\n\n")
+print(fevd(var_hd, n.ahead = 12)$d_cpi)
+sink()
+
+cat("\n완료: outputs/03_* 파일 생성\n")
