@@ -1,0 +1,104 @@
+# =============================================================
+# 01. 유가 충격의 물가 전이경로 분석
+#     유가 → 환율 → 수입물가 → PPI → CPI
+#     - ADF 단위근 검정
+#     - VAR 시차 선택 및 추정
+#     - 단계별 Granger 인과검정
+#     - 충격반응함수(IRF): 유가 충격 → CPI
+# 실행: 저장소 루트를 작업 디렉터리로 두고 source()
+# =============================================================
+
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(tseries)
+  library(vars)
+})
+source("R/ecos_utils.R")
+
+# ---------------- CONFIG: 파일명·항목명 확인 후 수정 ----------------
+DATA_DIR <- "data"
+OUT_DIR  <- "outputs"
+
+FILE_OIL_DAILY <- file.path(DATA_DIR, "국제_원유가격.csv")
+FILE_ER        <- file.path(DATA_DIR, "원화의_대미달러_환율.csv")
+FILE_IMP       <- file.path(DATA_DIR, "수입물가지수.csv")
+FILE_PPI       <- file.path(DATA_DIR, "생산자물가지수_품목별.csv")
+FILE_CPI       <- file.path(DATA_DIR, "소비자물가지수_특수분류.csv")
+
+KEY_IMP <- "원재료"   # 수입물가지수 CSV 2열의 원재료 항목명
+KEY_PPI <- "총지수"
+KEY_CPI <- "총지수"
+# ---------------------------------------------------------------------
+
+dir.create(OUT_DIR, showWarnings = FALSE)
+
+# 1. 데이터 로딩
+oil <- oil_monthly(read_oil_daily(FILE_OIL_DAILY))
+er  <- read_er(FILE_ER)
+imp <- read_ecos_wide(FILE_IMP, key_col = 2, key_value = KEY_IMP, out_name = "imp")
+ppi <- read_ecos_wide(FILE_PPI, key_col = 2, key_value = KEY_PPI, out_name = "ppi")
+cpi <- read_ecos_wide(FILE_CPI, key_col = 2, key_value = KEY_CPI, out_name = "cpi")
+
+df <- purrr::reduce(list(oil, er, imp, ppi, cpi),
+                    ~ inner_join(.x, .y, by = "date")) |>
+  arrange(date) |>
+  drop_na()
+
+cat("표본:", format(min(df$date)), "~", format(max(df$date)),
+    "/ n =", nrow(df), "\n\n")
+
+# 2. ADF 단위근 검정 (수준 / 1차 차분)
+vars_level <- c("oil", "er", "imp", "ppi", "cpi")
+cat("=== ADF 단위근 검정 (p-value) ===\n")
+for (v in vars_level) {
+  p_lv <- suppressWarnings(adf.test(df[[v]])$p.value)
+  p_df <- suppressWarnings(adf.test(diff(df[[v]]))$p.value)
+  cat(sprintf("%-4s  수준: %.4f  1차차분: %.4f\n", v, p_lv, p_df))
+}
+
+# 3. 1차 차분 데이터
+df_d <- tibble(
+  d_oil = diff(df$oil),
+  d_fx  = diff(df$er),
+  d_imp = diff(df$imp),
+  d_ppi = diff(df$ppi),
+  d_cpi = diff(df$cpi)
+)
+
+# 4. 시차 선택
+cat("\n=== VAR 시차 선택 ===\n")
+print(VARselect(df_d, lag.max = 6, type = "const")$selection)
+
+# 5. VAR 추정 (p = 1)
+var_5 <- VAR(df_d, p = 1, type = "const")
+
+# 6. 단계별 Granger 인과검정
+#    causality(cause = x)는 "x가 나머지 변수 전체를 Granger 인과하지 않는다"를 검정
+cat("\n=== 전이 경로 Granger 인과검정 (p-value) ===\n")
+steps <- c("① 유가 → (나머지)"     = "d_oil",
+           "② 환율 → (나머지)"     = "d_fx",
+           "③ 수입물가 → (나머지)" = "d_imp",
+           "④ PPI → (나머지)"      = "d_ppi")
+granger_tbl <- tibble(
+  경로    = names(steps),
+  p_value = map_dbl(steps, ~ causality(var_5, cause = .x)$Granger$p.value)
+)
+print(granger_tbl)
+
+# 7. 충격반응함수: 유가 충격 → CPI
+irf_5 <- irf(var_5, impulse = "d_oil", response = "d_cpi",
+             n.ahead = 12, boot = TRUE, ci = 0.95)
+
+png(file.path(OUT_DIR, "01_irf_oil_to_cpi.png"), width = 900, height = 600)
+plot(irf_5, main = "Oil shock -> CPI (5-variable VAR)")
+dev.off()
+
+# 8. 결과 저장
+sink(file.path(OUT_DIR, "01_VAR_결과.txt"))
+cat("===== 5변수 VAR(1) 추정 결과 =====\n\n")
+print(summary(var_5))
+cat("\n\n===== 단계별 Granger 인과검정 =====\n\n")
+print(granger_tbl)
+sink()
+
+cat("\n완료: outputs/01_irf_oil_to_cpi.png, outputs/01_VAR_결과.txt\n")
