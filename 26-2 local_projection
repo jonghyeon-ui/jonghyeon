@@ -1,0 +1,65 @@
+# =============================================================
+# 02. Local Projection (국소투영법)
+#     PPI 충격 발생 후 h개월(h = 1~12) 뒤 CPI 변화를 직접 회귀로 추정
+#     y_{t+h} = a_h + b_h * x_t + e_{t+h},  b_h를 h별로 연결해 반응경로 도출
+# 실행: 저장소 루트를 작업 디렉터리로 두고 source()
+# =============================================================
+
+suppressPackageStartupMessages({
+  library(tidyverse)
+})
+source("R/ecos_utils.R")
+
+# ---------------- CONFIG ----------------
+DATA_DIR <- "data"
+OUT_DIR  <- "outputs"
+FILE_PPI <- file.path(DATA_DIR, "생산자물가지수_품목별.csv")
+FILE_CPI <- file.path(DATA_DIR, "소비자물가지수_특수분류.csv")
+KEY_PPI  <- "총지수"
+KEY_CPI  <- "총지수"
+H_MAX    <- 12
+# ----------------------------------------
+
+dir.create(OUT_DIR, showWarnings = FALSE)
+
+ppi <- read_ecos_wide(FILE_PPI, key_col = 2, key_value = KEY_PPI, out_name = "ppi")
+cpi <- read_ecos_wide(FILE_CPI, key_col = 2, key_value = KEY_CPI, out_name = "cpi")
+
+df_lp <- inner_join(ppi, cpi, by = "date") |>
+  arrange(date) |>
+  mutate(d_ppi = c(NA, diff(ppi)),
+         d_cpi = c(NA, diff(cpi))) |>
+  drop_na()
+
+# h별 회귀
+lp <- map_dfr(1:H_MAX, function(h) {
+  y_lead  <- c(tail(df_lp$d_cpi, -h), rep(NA, h))
+  df_temp <- tibble(y = y_lead, x = df_lp$d_ppi) |> drop_na()
+  fit <- lm(y ~ x, data = df_temp)
+  ci  <- confint(fit, level = 0.95)
+  tibble(h = h,
+         coef  = unname(coef(fit)["x"]),
+         lower = ci["x", 1],
+         upper = ci["x", 2],
+         n     = nrow(df_temp))
+})
+
+print(lp)
+write_csv(lp, file.path(OUT_DIR, "02_lp_coefficients.csv"))
+
+# 시각화
+png(file.path(OUT_DIR, "02_local_projection.png"), width = 900, height = 600)
+plot(lp$h, lp$coef, type = "l", lwd = 2, col = "black",
+     ylim = range(c(lp$lower, lp$upper)),
+     main = "Local Projection: PPI shock -> CPI response",
+     xlab = "Horizon h (months)", ylab = "CPI change")
+lines(lp$h, lp$lower, lty = 2, col = "red")
+lines(lp$h, lp$upper, lty = 2, col = "red")
+abline(h = 0, col = "gray40", lwd = 1)
+legend("topright",
+       legend = c("LP estimate", "95% CI", "zero line"),
+       col = c("black", "red", "gray40"),
+       lty = c(1, 2, 1), lwd = c(2, 1, 1), cex = 0.8)
+dev.off()
+
+cat("\n완료: outputs/02_local_projection.png, outputs/02_lp_coefficients.csv\n")
